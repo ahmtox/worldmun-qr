@@ -22,7 +22,7 @@ export default function ScannerPage() {
       setIsLoading(true);
 
       try {
-        const res = await fetch("/api/scan", {
+        const res = await fetch("/worldmun-qr/api/scan", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ uid: decodedText.trim(), event: selectedEventRef.current }),
