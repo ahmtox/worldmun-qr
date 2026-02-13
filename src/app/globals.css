@@ -1,0 +1,30 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: var(--font-inter);
+  --color-brand-gold: #C5A55A;
+  --color-brand-dark: #0A0A0F;
+}
+
+body {
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+/* html5-qrcode overrides */
+#qr-reader video {
+  width: 100% !important;
+  border-radius: 0.5rem;
+}
+
+#qr-reader {
+  border: none !important;
+  padding: 0 !important;
+}
+
+#qr-reader__scan_region {
+  min-height: 0 !important;
+}
+
+#qr-reader__dashboard {
+  display: none !important;
+}
