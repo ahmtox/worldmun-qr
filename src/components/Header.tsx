@@ -9,6 +9,7 @@ export default function Header() {
         width={72}
         height={72}
         priority
+        unoptimized
       />
       <h1 className="text-xl font-semibold text-white tracking-tight">
         Attendance Scanner
