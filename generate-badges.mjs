@@ -1,27 +1,28 @@
 import { GoogleSpreadsheet } from "google-spreadsheet";
 import { JWT } from "google-auth-library";
 import QRCode from "qrcode";
-import { readFileSync, mkdirSync, writeFileSync } from "fs";
+import { readFileSync, mkdirSync, writeFileSync, existsSync } from "fs";
 import { join } from "path";
 import { PDFDocument } from "pdf-lib";
 
 // --- Config ---
 const SHEET_ID = "1vzz-LSSeFGscHZesKoR8RzdteKPiGl5ILq2Uni6uPuo";
-const PDF_PATH = join(import.meta.dirname, "observers.pdf");
-const OUTPUT_DIR = join(import.meta.dirname, "badges");
-const INDIVIDUAL_DIR = join(OUTPUT_DIR, "individual");
-const QR_DIR = join(OUTPUT_DIR, "qrcodes");
+const BADGES_DIR = join(import.meta.dirname, "badges");
+const IDENTIFIERS_DIR = join(BADGES_DIR, "identifiers");
+const OUTPUT_DIR = join(BADGES_DIR, "output");
+const QR_DIR = join(BADGES_DIR, "qrcodes");
 
-// Pages 1-2 are templates, real names start at page 3 (0-indexed: 2)
-const FIRST_REAL_PAGE = 2;
+const IDENTIFIERS = [
+  "OBSERVER", "SOLO", "BATCH1", "BATCH2", "BATCH3", "BATCH4",
+  "BATCH5", "BATCH6", "ASCHAIR", "SECRET", "COMMC", "FACADV",
+];
 
-// QR code placement: bottom-left white box
-// The white box is approximately 65x65 points, starting around x=28, y=28 from bottom-left
+// QR code placement: bottom-left yellow box
 const QR_X = 20;
 const QR_Y = 11;
 const QR_SIZE = 76;
 
-mkdirSync(INDIVIDUAL_DIR, { recursive: true });
+mkdirSync(OUTPUT_DIR, { recursive: true });
 mkdirSync(QR_DIR, { recursive: true });
 
 // --- Auth ---
@@ -36,121 +37,112 @@ const auth = new JWT({
 const doc = new GoogleSpreadsheet(SHEET_ID, auth);
 await doc.loadInfo();
 
-const namesSheet = doc.sheetsByTitle["NAMES"];
-if (!namesSheet) {
-  console.error('ERROR: No "NAMES" sheet found in the spreadsheet.');
+const delegatesSheet = doc.sheetsByTitle["DELEGATES"];
+if (!delegatesSheet) {
+  console.error('ERROR: No "DELEGATES" sheet found.');
   process.exit(1);
 }
 
-await namesSheet.loadHeaderRow();
-const headers = namesSheet.headerValues;
-console.log("NAMES sheet headers:", headers);
+await delegatesSheet.loadHeaderRow();
+console.log("DELEGATES headers:", delegatesSheet.headerValues);
 
-// Ensure QR_UID column exists
-if (!headers.includes("QR_UID")) {
-  console.log("Adding QR_UID column to NAMES sheet...");
-  await namesSheet.setHeaderRow([...headers, "QR_UID"]);
-  await namesSheet.loadHeaderRow();
+const allRows = await delegatesSheet.getRows();
+console.log(`Found ${allRows.length} total rows in DELEGATES sheet.\n`);
+
+// --- Group rows by IDENTIFIER ---
+const grouped = {};
+for (const row of allRows) {
+  const id = (row.get("IDENTIFIER") || "").trim();
+  if (!id) continue;
+  if (!grouped[id]) grouped[id] = [];
+  grouped[id].push(row);
 }
 
-const namesRows = await namesSheet.getRows();
-console.log(`Found ${namesRows.length} rows in NAMES sheet.`);
+console.log("Rows per identifier:");
+for (const [id, rows] of Object.entries(grouped)) {
+  console.log(`  ${id}: ${rows.length} delegates`);
+}
+console.log();
 
-// --- Load PDF ---
-const pdfBytes = readFileSync(PDF_PATH);
-const pdfDoc = await PDFDocument.load(pdfBytes);
-const totalPages = pdfDoc.getPageCount();
-console.log(`PDF has ${totalPages} pages. Real names on pages ${FIRST_REAL_PAGE + 1}-${totalPages}.`);
+// --- Process each identifier ---
+for (const identifier of IDENTIFIERS) {
+  const rows = grouped[identifier];
+  if (!rows || rows.length === 0) {
+    console.warn(`WARNING: No delegates found for ${identifier}, skipping.`);
+    continue;
+  }
 
-const realPageCount = totalPages - FIRST_REAL_PAGE;
-console.log(`${realPageCount} badge pages, ${namesRows.length} names in sheet.`);
+  const pdfPath = join(IDENTIFIERS_DIR, `${identifier}.pdf`);
+  if (!existsSync(pdfPath)) {
+    console.warn(`WARNING: PDF not found at ${pdfPath}, skipping.`);
+    continue;
+  }
 
-if (realPageCount !== namesRows.length) {
-  console.warn(
-    `WARNING: Page count (${realPageCount}) != sheet row count (${namesRows.length}). ` +
-    `Will process min(${Math.min(realPageCount, namesRows.length)}) entries.`
-  );
+  const pdfBytes = readFileSync(pdfPath);
+  const pdfDoc = await PDFDocument.load(pdfBytes);
+  const totalPages = pdfDoc.getPageCount();
+
+  if (totalPages !== rows.length) {
+    console.warn(
+      `WARNING [${identifier}]: PDF has ${totalPages} pages but sheet has ${rows.length} delegates. ` +
+      `Processing min(${Math.min(totalPages, rows.length)}).`
+    );
+  }
+
+  const count = Math.min(totalPages, rows.length);
+  const combinedPdf = await PDFDocument.create();
+
+  console.log(`Processing ${identifier} (${count} badges)...`);
+
+  for (let i = 0; i < count; i++) {
+    const row = rows[i];
+    const uid = (row.get("QR_UID") || "").trim();
+    const name = row.get("NAME") || `Unknown_${i}`;
+
+    if (!uid) {
+      console.warn(`  WARNING: No QR_UID for row ${i + 1} (${name}), skipping.`);
+      continue;
+    }
+
+    // Generate QR code PNG
+    const qrPngBuffer = await QRCode.toBuffer(uid, {
+      type: "png",
+      width: 300,
+      margin: 1,
+      color: { dark: "#000000", light: "#FFFFFF" },
+      errorCorrectionLevel: "M",
+    });
+
+    // Save standalone QR code image
+    writeFileSync(join(QR_DIR, `${uid}.png`), qrPngBuffer);
+
+    // Create a temp PDF with this page + QR overlay
+    const tempPdf = await PDFDocument.create();
+    const [copiedPage] = await tempPdf.copyPages(pdfDoc, [i]);
+    tempPdf.addPage(copiedPage);
+
+    const qrImage = await tempPdf.embedPng(qrPngBuffer);
+    tempPdf.getPages()[0].drawImage(qrImage, {
+      x: QR_X,
+      y: QR_Y,
+      width: QR_SIZE,
+      height: QR_SIZE,
+    });
+
+    // Copy into combined PDF
+    const [finalPage] = await combinedPdf.copyPages(tempPdf, [0]);
+    combinedPdf.addPage(finalPage);
+
+    console.log(`  [${i + 1}/${count}] ${name} -> ${uid}`);
+  }
+
+  // Save combined PDF for this identifier
+  const combinedBytes = await combinedPdf.save();
+  const outputPath = join(OUTPUT_DIR, `${identifier}-badges.pdf`);
+  writeFileSync(outputPath, combinedBytes);
+  console.log(`  -> Saved ${outputPath}\n`);
 }
 
-const count = Math.min(realPageCount, namesRows.length);
-
-// --- Generate UIDs and QR codes, then embed into PDF pages ---
-function generateUID(index) {
-  return "obs-" + String(index + 1).padStart(4, "0");
-}
-
-// Combined PDF for all badges
-const combinedPdf = await PDFDocument.create();
-
-console.log("\nProcessing badges...");
-
-for (let i = 0; i < count; i++) {
-  const row = namesRows[i];
-  const fullName = row.get("FULL_NAME") || row.get(headers[0]) || `Unknown_${i}`;
-
-  // Generate sequential UID (always overwrite to ensure linear ordering)
-  const uid = generateUID(i);
-  row.set("QR_UID", uid);
-  await row.save();
-
-  // Generate QR code PNG buffer (no text, just QR)
-  const qrPngBuffer = await QRCode.toBuffer(uid, {
-    type: "png",
-    width: 300,
-    margin: 1,
-    color: { dark: "#000000", light: "#FFFFFF" },
-    errorCorrectionLevel: "M",
-  });
-
-  // Save standalone QR code file
-  const safeName = fullName.replace(/[^a-zA-Z0-9áéíóúñÁÉÍÓÚÑ .,'-]/g, "_").trim();
-  writeFileSync(join(QR_DIR, `${uid}.png`), qrPngBuffer);
-
-  // --- Embed QR into individual PDF page ---
-  const pageIndex = FIRST_REAL_PAGE + i;
-
-  // Create individual PDF with just this page
-  const individualPdf = await PDFDocument.create();
-  const [copiedPage] = await individualPdf.copyPages(pdfDoc, [pageIndex]);
-  individualPdf.addPage(copiedPage);
-
-  // Embed QR image into the individual PDF's page
-  const qrImage = await individualPdf.embedPng(qrPngBuffer);
-  const page = individualPdf.getPages()[0];
-  page.drawImage(qrImage, {
-    x: QR_X,
-    y: QR_Y,
-    width: QR_SIZE,
-    height: QR_SIZE,
-  });
-
-  // Save individual PDF
-  const individualBytes = await individualPdf.save();
-  writeFileSync(join(INDIVIDUAL_DIR, `${safeName}.pdf`), individualBytes);
-
-  // Also copy page into combined PDF (with QR embedded)
-  const combinedCopy = await PDFDocument.create();
-  const [combinedPage] = await combinedCopy.copyPages(pdfDoc, [pageIndex]);
-  combinedCopy.addPage(combinedPage);
-  const combinedQr = await combinedCopy.embedPng(qrPngBuffer);
-  combinedCopy.getPages()[0].drawImage(combinedQr, {
-    x: QR_X,
-    y: QR_Y,
-    width: QR_SIZE,
-    height: QR_SIZE,
-  });
-  const [finalPage] = await combinedPdf.copyPages(combinedCopy, [0]);
-  combinedPdf.addPage(finalPage);
-
-  console.log(`  [${i + 1}/${count}] ${fullName} → ${uid}`);
-}
-
-// Save combined PDF
-const combinedBytes = await combinedPdf.save();
-writeFileSync(join(OUTPUT_DIR, "all-badges.pdf"), combinedBytes);
-
-console.log(`\nDone!`);
-console.log(`  Individual PDFs: ${INDIVIDUAL_DIR}/`);
-console.log(`  QR code PNGs:    ${QR_DIR}/`);
-console.log(`  Combined PDF:    ${join(OUTPUT_DIR, "all-badges.pdf")}`);
-console.log(`  UIDs written to NAMES sheet in spreadsheet.`);
+console.log("Done!");
+console.log(`  QR code PNGs: ${QR_DIR}/`);
+console.log(`  Badge PDFs:   ${OUTPUT_DIR}/`);

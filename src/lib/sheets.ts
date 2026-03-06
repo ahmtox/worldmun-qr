@@ -3,7 +3,15 @@ import { JWT } from "google-auth-library";
 
 let docInstance: GoogleSpreadsheet | null = null;
 
-const FIXED_COLUMNS = new Set(["GROUP_NAME", "EMAIL", "NAME", "QR_UID"]);
+const FIXED_COLUMNS = new Set([
+  "IDENTIFIER",
+  "DELEGATION",
+  "EMAIL",
+  "NAME",
+  "QR_UID",
+  "QR_URL",
+  "Social Package",
+]);
 
 async function getDoc(): Promise<GoogleSpreadsheet> {
   if (docInstance) return docInstance;
@@ -40,7 +48,8 @@ export async function lookupAndIncrement(
   uid: string,
   event: string
 ): Promise<{
-  groupName: string;
+  name: string;
+  delegation: string;
   email: string;
   qrUid: string;
   event: string;
@@ -75,8 +84,9 @@ export async function lookupAndIncrement(
     throw new Error("Not eligible for this event");
   }
 
-  const email = delegateRow.get("EMAIL");
-  const groupName = delegateRow.get("GROUP_NAME");
+  const email = delegateRow.get("EMAIL") || "";
+  const name = delegateRow.get("NAME") || "";
+  const delegation = delegateRow.get("DELEGATION") || "";
 
   // 3. Find attendance row and increment counter
   const attendanceSheet = doc.sheetsByTitle["ATTENDANCE"];
@@ -92,7 +102,7 @@ export async function lookupAndIncrement(
 
   const attendanceRows = await attendanceSheet.getRows();
   const attendanceRow = attendanceRows.find(
-    (row) => row.get("EMAIL") === email
+    (row) => row.get("QR_UID") === uid
   );
 
   if (!attendanceRow) {
@@ -106,7 +116,8 @@ export async function lookupAndIncrement(
   await attendanceRow.save();
 
   return {
-    groupName,
+    name,
+    delegation,
     email,
     qrUid: uid,
     event,

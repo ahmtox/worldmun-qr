@@ -61,7 +61,8 @@ export default function ResultModal({ result, isOpen, onClose }: ResultModalProp
         {/* Details */}
         {result.success ? (
           <div className="space-y-2 text-sm">
-            <DetailRow label="Group" value={result.groupName} />
+            <DetailRow label="Name" value={result.name} />
+            <DetailRow label="Delegation" value={result.delegation} />
             <DetailRow label="Email" value={result.email} />
             <DetailRow label="UID" value={result.qrUid} />
             <DetailRow label="Event" value={result.event} />

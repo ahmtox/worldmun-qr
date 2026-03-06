@@ -5,7 +5,8 @@ export interface ScanRequest {
 
 export interface ScanSuccessResponse {
   success: true;
-  groupName: string;
+  name: string;
+  delegation: string;
   email: string;
   qrUid: string;
   event: string;
