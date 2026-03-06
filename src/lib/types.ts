@@ -15,6 +15,7 @@ export interface ScanSuccessResponse {
 export interface ScanErrorResponse {
   success: false;
   error: string;
+  scannedUid?: string;
 }
 
 export type ScanResponse = ScanSuccessResponse | ScanErrorResponse;

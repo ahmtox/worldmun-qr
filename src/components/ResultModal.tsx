@@ -71,7 +71,12 @@ export default function ResultModal({ result, isOpen, onClose }: ResultModalProp
             />
           </div>
         ) : (
-          <p className="text-center text-gray-300 text-sm">{result.error}</p>
+          <div className="space-y-2 text-sm">
+            {result.scannedUid && (
+              <DetailRow label="Scanned UID" value={result.scannedUid} />
+            )}
+            <p className="text-center text-gray-300 mt-2">{result.error}</p>
+          </div>
         )}
 
         {/* Dismiss button */}

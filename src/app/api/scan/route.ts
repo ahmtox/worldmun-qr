@@ -3,16 +3,18 @@ import { lookupAndIncrement } from "@/lib/sheets";
 import { ScanErrorResponse, ScanSuccessResponse } from "@/lib/types";
 
 export async function POST(request: NextRequest) {
+  let scannedUid: string | undefined;
   try {
     const body = await request.json();
     const { uid, event } = body as { uid?: string; event?: string };
+    scannedUid = typeof uid === "string" ? uid.trim() : undefined;
 
     console.log("[scan] Received:", { uid, event });
 
     if (!uid || typeof uid !== "string" || uid.trim().length === 0) {
       console.log("[scan] Invalid UID");
       return NextResponse.json<ScanErrorResponse>(
-        { success: false, error: "Invalid UID" },
+        { success: false, error: "Invalid UID", scannedUid },
         { status: 400 }
       );
     }
@@ -20,7 +22,7 @@ export async function POST(request: NextRequest) {
     if (!event || typeof event !== "string" || event.trim().length === 0) {
       console.log("[scan] Invalid event:", event);
       return NextResponse.json<ScanErrorResponse>(
-        { success: false, error: "Invalid event" },
+        { success: false, error: "Invalid event", scannedUid },
         { status: 400 }
       );
     }
@@ -48,7 +50,7 @@ export async function POST(request: NextRequest) {
     if (message.startsWith("Invalid event")) status = 400;
 
     return NextResponse.json<ScanErrorResponse>(
-      { success: false, error: message },
+      { success: false, error: message, scannedUid },
       { status }
     );
   }

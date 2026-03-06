@@ -11,6 +11,9 @@ const inter = localFont({
 export const metadata: Metadata = {
   title: "WorldMUN Attendance",
   description: "QR Code attendance tracking for WorldMUN conference",
+  icons: {
+    icon: "/worldmun-qr/worldmun-logo.webp",
+  },
 };
 
 export default function RootLayout({

@@ -3,7 +3,7 @@ import { JWT } from "google-auth-library";
 
 let docInstance: GoogleSpreadsheet | null = null;
 
-const FIXED_COLUMNS = new Set(["GROUP_NAME", "EMAIL", "QR_CODE_LINK", "QR_UID"]);
+const FIXED_COLUMNS = new Set(["GROUP_NAME", "EMAIL", "NAME", "QR_UID"]);
 
 async function getDoc(): Promise<GoogleSpreadsheet> {
   if (docInstance) return docInstance;
