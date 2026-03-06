@@ -28,7 +28,15 @@ export default function QrScanner({ onScan, isLoading }: QrScannerProps) {
       try {
         await html5Qrcode.start(
           { facingMode: "environment" },
-          { fps: 10, qrbox: { width: 250, height: 250 } },
+          {
+            fps: 30,
+            qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
+              const size = Math.min(viewfinderWidth, viewfinderHeight) * 0.8;
+              return { width: size, height: size };
+            },
+            aspectRatio: 1,
+            disableFlip: false,
+          },
           (decodedText) => {
             onScanRef.current(decodedText);
           },

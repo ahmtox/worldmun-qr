@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { lookupAndIncrement } from "@/lib/sheets";
-import { EVENT_NAMES, EventName, ScanErrorResponse, ScanSuccessResponse } from "@/lib/types";
+import { ScanErrorResponse, ScanSuccessResponse } from "@/lib/types";
 
 export async function POST(request: NextRequest) {
   try {
@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!event || !EVENT_NAMES.includes(event as EventName)) {
+    if (!event || typeof event !== "string" || event.trim().length === 0) {
       console.log("[scan] Invalid event:", event);
       return NextResponse.json<ScanErrorResponse>(
         { success: false, error: "Invalid event" },
@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
     }
 
     console.log("[scan] Looking up UID:", uid.trim(), "for event:", event);
-    const result = await lookupAndIncrement(uid.trim(), event as EventName);
+    const result = await lookupAndIncrement(uid.trim(), event);
     console.log("[scan] Success:", result);
 
     return NextResponse.json<ScanSuccessResponse>({
@@ -45,6 +45,7 @@ export async function POST(request: NextRequest) {
     let status = 500;
     if (message === "UID not found") status = 404;
     if (message === "Not eligible for this event") status = 403;
+    if (message.startsWith("Invalid event")) status = 400;
 
     return NextResponse.json<ScanErrorResponse>(
       { success: false, error: message },

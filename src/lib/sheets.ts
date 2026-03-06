@@ -1,8 +1,9 @@
 import { GoogleSpreadsheet } from "google-spreadsheet";
 import { JWT } from "google-auth-library";
-import { EventName } from "./types";
 
 let docInstance: GoogleSpreadsheet | null = null;
+
+const FIXED_COLUMNS = new Set(["GROUP_NAME", "EMAIL", "QR_CODE_LINK", "QR_UID"]);
 
 async function getDoc(): Promise<GoogleSpreadsheet> {
   if (docInstance) return docInstance;
@@ -20,14 +21,29 @@ async function getDoc(): Promise<GoogleSpreadsheet> {
   return doc;
 }
 
+export async function getEventColumns(): Promise<string[]> {
+  const doc = await getDoc();
+
+  const delegatesSheet = doc.sheetsByTitle["DELEGATES"];
+  if (!delegatesSheet) {
+    throw new Error("DELEGATES sheet not found");
+  }
+
+  await delegatesSheet.loadHeaderRow();
+  const headers = delegatesSheet.headerValues;
+
+  // Event columns are everything that isn't a fixed column
+  return headers.filter((h) => !FIXED_COLUMNS.has(h));
+}
+
 export async function lookupAndIncrement(
   uid: string,
-  event: EventName
+  event: string
 ): Promise<{
   groupName: string;
   email: string;
   qrUid: string;
-  event: EventName;
+  event: string;
   previousCount: number;
 }> {
   const doc = await getDoc();
@@ -36,6 +52,12 @@ export async function lookupAndIncrement(
   const delegatesSheet = doc.sheetsByTitle["DELEGATES"];
   if (!delegatesSheet) {
     throw new Error("DELEGATES sheet not found");
+  }
+
+  // Validate that the event column actually exists in the sheet
+  await delegatesSheet.loadHeaderRow();
+  if (!delegatesSheet.headerValues.includes(event)) {
+    throw new Error("Invalid event: column not found in sheet");
   }
 
   const delegateRows = await delegatesSheet.getRows();
@@ -60,6 +82,12 @@ export async function lookupAndIncrement(
   const attendanceSheet = doc.sheetsByTitle["ATTENDANCE"];
   if (!attendanceSheet) {
     throw new Error("ATTENDANCE sheet not found");
+  }
+
+  // Validate the event column exists in ATTENDANCE too
+  await attendanceSheet.loadHeaderRow();
+  if (!attendanceSheet.headerValues.includes(event)) {
+    throw new Error("Event column not found in ATTENDANCE sheet");
   }
 
   const attendanceRows = await attendanceSheet.getRows();
