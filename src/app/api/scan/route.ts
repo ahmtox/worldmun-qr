@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { lookupAndIncrement } from "@/lib/sheets";
+import { lookupAndIncrement, ScanError } from "@/lib/sheets";
 import { ScanErrorResponse, ScanSuccessResponse } from "@/lib/types";
 
 export async function POST(request: NextRequest) {
@@ -40,17 +40,17 @@ export async function POST(request: NextRequest) {
       error instanceof Error ? error.message : "An unexpected error occurred";
 
     console.error("[scan] Error:", message);
-    if (error instanceof Error && error.stack) {
-      console.error("[scan] Stack:", error.stack);
-    }
 
     let status = 500;
     if (message === "UID not found") status = 404;
     if (message === "Not eligible for this event") status = 403;
     if (message.startsWith("Invalid event")) status = 400;
 
+    const delegate =
+      error instanceof ScanError ? error.delegate : undefined;
+
     return NextResponse.json<ScanErrorResponse>(
-      { success: false, error: message, scannedUid },
+      { success: false, error: message, scannedUid, delegate },
       { status }
     );
   }

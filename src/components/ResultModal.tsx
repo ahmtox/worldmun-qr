@@ -66,6 +66,7 @@ export default function ResultModal({ result, isOpen, onClose }: ResultModalProp
             <DetailRow label="Email" value={result.email} />
             <DetailRow label="UID" value={result.qrUid} />
             <DetailRow label="Event" value={result.event} />
+            <DetailRow label="Access" value={result.accessType} />
             <DetailRow
               label="Previous scans"
               value={String(result.previousCount)}
@@ -73,10 +74,17 @@ export default function ResultModal({ result, isOpen, onClose }: ResultModalProp
           </div>
         ) : (
           <div className="space-y-2 text-sm">
-            {result.scannedUid && (
+            {result.delegate ? (
+              <>
+                <DetailRow label="Name" value={result.delegate.name} />
+                <DetailRow label="Delegation" value={result.delegate.delegation} />
+                <DetailRow label="Email" value={result.delegate.email} />
+                <DetailRow label="UID" value={result.delegate.qrUid} />
+              </>
+            ) : result.scannedUid ? (
               <DetailRow label="Scanned UID" value={result.scannedUid} />
-            )}
-            <p className="text-center text-gray-300 mt-2">{result.error}</p>
+            ) : null}
+            <p className="text-center text-red-300 mt-3 font-medium">{result.error}</p>
           </div>
         )}
 

@@ -13,6 +13,21 @@ const FIXED_COLUMNS = new Set([
   "Social Package",
 ]);
 
+export interface DelegateInfo {
+  name: string;
+  delegation: string;
+  email: string;
+  qrUid: string;
+}
+
+export class ScanError extends Error {
+  delegate?: DelegateInfo;
+  constructor(message: string, delegate?: DelegateInfo) {
+    super(message);
+    this.delegate = delegate;
+  }
+}
+
 async function getDoc(): Promise<GoogleSpreadsheet> {
   if (docInstance) return docInstance;
 
@@ -53,6 +68,7 @@ export async function lookupAndIncrement(
   email: string;
   qrUid: string;
   event: string;
+  accessType: string;
   previousCount: number;
 }> {
   const doc = await getDoc();
@@ -75,29 +91,34 @@ export async function lookupAndIncrement(
   );
 
   if (!delegateRow) {
-    throw new Error("UID not found");
-  }
-
-  // 2. Check eligibility for the event
-  const eligible = delegateRow.get(event);
-  if (eligible !== "TRUE" && eligible !== true) {
-    throw new Error("Not eligible for this event");
+    throw new ScanError("UID not found");
   }
 
   const email = delegateRow.get("EMAIL") || "";
   const name = delegateRow.get("NAME") || "";
   const delegation = delegateRow.get("DELEGATION") || "";
+  const delegate: DelegateInfo = { name, delegation, email, qrUid: uid };
+
+  // 2. Check eligibility: Social Package grants access to all events
+  const socialPackage = delegateRow.get("Social Package");
+  const hasSocialPackage = socialPackage === "TRUE" || socialPackage === true;
+  if (!hasSocialPackage) {
+    const eligible = delegateRow.get(event);
+    if (eligible !== "TRUE" && eligible !== true) {
+      throw new ScanError("Not eligible for this event", delegate);
+    }
+  }
 
   // 3. Find attendance row and increment counter
   const attendanceSheet = doc.sheetsByTitle["ATTENDANCE"];
   if (!attendanceSheet) {
-    throw new Error("ATTENDANCE sheet not found");
+    throw new ScanError("ATTENDANCE sheet not found", delegate);
   }
 
   // Validate the event column exists in ATTENDANCE too
   await attendanceSheet.loadHeaderRow();
   if (!attendanceSheet.headerValues.includes(event)) {
-    throw new Error("Event column not found in ATTENDANCE sheet");
+    throw new ScanError("Event column not found in ATTENDANCE sheet", delegate);
   }
 
   const attendanceRows = await attendanceSheet.getRows();
@@ -106,7 +127,7 @@ export async function lookupAndIncrement(
   );
 
   if (!attendanceRow) {
-    throw new Error("Attendance row not found for this delegate");
+    throw new ScanError("Attendance row not found for this delegate", delegate);
   }
 
   const currentValue = attendanceRow.get(event);
@@ -121,6 +142,7 @@ export async function lookupAndIncrement(
     email,
     qrUid: uid,
     event,
+    accessType: hasSocialPackage ? "Social Package" : "Individual Event",
     previousCount,
   };
 }
