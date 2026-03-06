@@ -23,19 +23,18 @@ export default function QrScanner({ onScan, isLoading }: QrScannerProps) {
       const { Html5Qrcode } = await import("html5-qrcode");
       if (stopped) return;
 
-      html5Qrcode = new Html5Qrcode("qr-reader");
+      html5Qrcode = new Html5Qrcode("qr-reader", {
+        verbose: false,
+        experimentalFeatures: {
+          useBarCodeDetectorIfSupported: true,
+        },
+      });
 
       try {
         await html5Qrcode.start(
           { facingMode: "environment" },
           {
-            fps: 30,
-            qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
-              const size = Math.min(viewfinderWidth, viewfinderHeight) * 0.8;
-              return { width: size, height: size };
-            },
-            aspectRatio: 1,
-            disableFlip: false,
+            fps: 15,
           },
           (decodedText) => {
             onScanRef.current(decodedText);
