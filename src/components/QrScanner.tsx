@@ -10,7 +10,7 @@ interface QrScannerProps {
 declare global {
   interface Window {
     BarcodeDetector: new (options: { formats: string[] }) => {
-      detect: (source: HTMLVideoElement) => Promise<{ rawValue: string }[]>;
+      detect: (source: HTMLVideoElement | HTMLCanvasElement) => Promise<{ rawValue: string }[]>;
     };
   }
 }
@@ -19,6 +19,7 @@ export default function QrScanner({ onScan, isLoading }: QrScannerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const onScanRef = useRef(onScan);
   const [error, setError] = useState<string | null>(null);
+  const [scannerType, setScannerType] = useState<string>("");
 
   useEffect(() => {
     onScanRef.current = onScan;
@@ -27,17 +28,18 @@ export default function QrScanner({ onScan, isLoading }: QrScannerProps) {
   useEffect(() => {
     let stopped = false;
     let stream: MediaStream | null = null;
-    let rafId: number | null = null;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
     async function start() {
       const hasNative = "BarcodeDetector" in window;
+      setScannerType(hasNative ? "native" : "jsqr");
 
       try {
         stream = await navigator.mediaDevices.getUserMedia({
           video: {
             facingMode: "environment",
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
+            width: { ideal: 640 },
+            height: { ideal: 480 },
           },
         });
       } catch {
@@ -57,40 +59,47 @@ export default function QrScanner({ onScan, isLoading }: QrScannerProps) {
       if (hasNative) {
         const detector = new window.BarcodeDetector({ formats: ["qr_code"] });
 
-        async function scanNative() {
-          if (stopped) return;
-          try {
-            const results = await detector.detect(video);
-            if (results.length > 0) {
-              onScanRef.current(results[0].rawValue);
+        // Sequential loop — wait for detect() to finish before trying again
+        async function scanLoop() {
+          while (!stopped) {
+            try {
+              const results = await detector.detect(video);
+              if (results.length > 0 && !stopped) {
+                onScanRef.current(results[0].rawValue);
+              }
+            } catch {
+              // frame not ready
             }
-          } catch {
-            // frame not ready, retry
+            // Brief yield so we don't block the UI thread
+            await new Promise((r) => { timeoutId = setTimeout(r, 50); });
           }
-          if (!stopped) rafId = requestAnimationFrame(scanNative);
         }
-        rafId = requestAnimationFrame(scanNative);
+        scanLoop();
       } else {
-        // Fallback: jsQR (pure JS decoder)
+        // Fallback: jsQR at reduced resolution
         const jsQR = (await import("jsqr")).default;
+        const SCAN_W = 480;
         const canvas = document.createElement("canvas");
         const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
 
-        function scanFallback() {
-          if (stopped) return;
-          if (video.readyState === video.HAVE_ENOUGH_DATA) {
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            ctx.drawImage(video, 0, 0);
-            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const result = jsQR(imageData.data, canvas.width, canvas.height);
-            if (result) {
-              onScanRef.current(result.data);
+        async function scanLoop() {
+          while (!stopped) {
+            if (video.readyState === video.HAVE_ENOUGH_DATA) {
+              // Scale down for faster processing
+              const scale = SCAN_W / video.videoWidth;
+              canvas.width = SCAN_W;
+              canvas.height = Math.round(video.videoHeight * scale);
+              ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+              const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+              const result = jsQR(imageData.data, canvas.width, canvas.height);
+              if (result && !stopped) {
+                onScanRef.current(result.data);
+              }
             }
+            await new Promise((r) => { timeoutId = setTimeout(r, 80); });
           }
-          if (!stopped) rafId = requestAnimationFrame(scanFallback);
         }
-        rafId = requestAnimationFrame(scanFallback);
+        scanLoop();
       }
     }
 
@@ -98,7 +107,7 @@ export default function QrScanner({ onScan, isLoading }: QrScannerProps) {
 
     return () => {
       stopped = true;
-      if (rafId !== null) cancelAnimationFrame(rafId);
+      if (timeoutId !== null) clearTimeout(timeoutId);
       if (stream) stream.getTracks().forEach((t) => t.stop());
     };
   }, []);
@@ -111,6 +120,11 @@ export default function QrScanner({ onScan, isLoading }: QrScannerProps) {
         playsInline
         muted
       />
+      {scannerType && (
+        <div className="absolute top-2 right-2 text-[10px] text-gray-500 bg-black/50 px-1.5 py-0.5 rounded">
+          {scannerType}
+        </div>
+      )}
       {error && (
         <div className="mt-2 p-3 bg-red-900/50 border border-red-700 rounded-lg text-red-200 text-sm">
           {error}
