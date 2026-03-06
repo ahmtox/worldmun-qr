@@ -7,7 +7,16 @@ interface QrScannerProps {
   isLoading: boolean;
 }
 
+declare global {
+  interface Window {
+    BarcodeDetector: new (options: { formats: string[] }) => {
+      detect: (source: HTMLVideoElement) => Promise<{ rawValue: string }[]>;
+    };
+  }
+}
+
 export default function QrScanner({ onScan, isLoading }: QrScannerProps) {
+  const videoRef = useRef<HTMLVideoElement>(null);
   const onScanRef = useRef(onScan);
   const [error, setError] = useState<string | null>(null);
 
@@ -16,51 +25,92 @@ export default function QrScanner({ onScan, isLoading }: QrScannerProps) {
   }, [onScan]);
 
   useEffect(() => {
-    let html5Qrcode: InstanceType<typeof import("html5-qrcode").Html5Qrcode> | null = null;
     let stopped = false;
+    let stream: MediaStream | null = null;
+    let rafId: number | null = null;
 
-    async function startScanner() {
-      const { Html5Qrcode } = await import("html5-qrcode");
-      if (stopped) return;
-
-      html5Qrcode = new Html5Qrcode("qr-reader", {
-        verbose: false,
-        experimentalFeatures: {
-          useBarCodeDetectorIfSupported: true,
-        },
-      });
+    async function start() {
+      const hasNative = "BarcodeDetector" in window;
 
       try {
-        await html5Qrcode.start(
-          { facingMode: "environment" },
-          {
-            fps: 15,
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: "environment",
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
           },
-          (decodedText) => {
-            onScanRef.current(decodedText);
-          },
-          () => {}
-        );
+        });
       } catch {
-        setError(
-          "Camera access denied. Please allow camera permissions and reload the page."
-        );
+        setError("Camera access denied. Please allow camera permissions and reload.");
+        return;
+      }
+
+      if (stopped || !videoRef.current) {
+        stream.getTracks().forEach((t) => t.stop());
+        return;
+      }
+
+      const video = videoRef.current;
+      video.srcObject = stream;
+      await video.play();
+
+      if (hasNative) {
+        const detector = new window.BarcodeDetector({ formats: ["qr_code"] });
+
+        async function scanNative() {
+          if (stopped) return;
+          try {
+            const results = await detector.detect(video);
+            if (results.length > 0) {
+              onScanRef.current(results[0].rawValue);
+            }
+          } catch {
+            // frame not ready, retry
+          }
+          if (!stopped) rafId = requestAnimationFrame(scanNative);
+        }
+        rafId = requestAnimationFrame(scanNative);
+      } else {
+        // Fallback: jsQR (pure JS decoder)
+        const jsQR = (await import("jsqr")).default;
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
+
+        function scanFallback() {
+          if (stopped) return;
+          if (video.readyState === video.HAVE_ENOUGH_DATA) {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0);
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const result = jsQR(imageData.data, canvas.width, canvas.height);
+            if (result) {
+              onScanRef.current(result.data);
+            }
+          }
+          if (!stopped) rafId = requestAnimationFrame(scanFallback);
+        }
+        rafId = requestAnimationFrame(scanFallback);
       }
     }
 
-    startScanner();
+    start();
 
     return () => {
       stopped = true;
-      if (html5Qrcode) {
-        html5Qrcode.stop().catch(() => {});
-      }
+      if (rafId !== null) cancelAnimationFrame(rafId);
+      if (stream) stream.getTracks().forEach((t) => t.stop());
     };
   }, []);
 
   return (
     <div className="relative">
-      <div id="qr-reader" className="w-full rounded-lg overflow-hidden bg-gray-900" />
+      <video
+        ref={videoRef}
+        className="w-full rounded-lg bg-gray-900"
+        playsInline
+        muted
+      />
       {error && (
         <div className="mt-2 p-3 bg-red-900/50 border border-red-700 rounded-lg text-red-200 text-sm">
           {error}
