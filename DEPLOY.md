@@ -1,9 +1,19 @@
 # Production Deployment (VPS - morelos.dev)
 
-## Prerequisites
-- Node.js (v18+) installed on VPS
-- PM2 installed globally: `npm install -g pm2`
-- nginx with SSL already configured for morelos.dev
+Runs at `https://morelos.dev/worldmun-qr`
+
+## .env.local
+
+```
+NEXT_PUBLIC_BASE_PATH=/worldmun-qr
+SHEET_ID=<your-google-sheet-id>
+GOOGLE_SERVICE_ACCOUNT_JSON=<single-line JSON from sa.json>
+```
+
+To generate the single-line JSON from sa.json:
+```bash
+node -e "console.log(JSON.stringify(JSON.parse(require('fs').readFileSync('sa.json','utf8'))))"
+```
 
 ## First-time setup
 
@@ -16,15 +26,7 @@ cd /var/www/html/worldmun-qr
 ```bash
 nano .env.local
 ```
-Contents:
-```
-SHEET_ID=<your-google-sheet-id>
-GOOGLE_SERVICE_ACCOUNT_JSON=<single-line JSON from sa.json>
-```
-To generate the single-line JSON from sa.json:
-```bash
-node -e "console.log(JSON.stringify(JSON.parse(require('fs').readFileSync('sa.json','utf8'))))"
-```
+Paste the env vars above.
 
 ### 3. Install dependencies and build
 ```bash
@@ -64,8 +66,8 @@ sudo systemctl reload nginx
 ## Redeploy after code changes
 ```bash
 cd /var/www/html/worldmun-qr
-npm run build
-pm2 restart worldmun-qr
+sudo npm run build
+sudo pm2 restart worldmun-qr
 ```
 
 ## PM2 commands
@@ -82,7 +84,7 @@ pm2 delete worldmun-qr      # remove from PM2
 curl https://morelos.dev/worldmun-qr
 curl -X POST https://morelos.dev/worldmun-qr/api/scan \
   -H "Content-Type: application/json" \
-  -d '{"uid":"fake_uid1","event":"EVENT_1"}'
+  -d '{"uid":"obs-0001","event":"Event 1:\nNight Zero"}'
 ```
 
 Open https://morelos.dev/worldmun-qr on your phone to test the full scanner flow.

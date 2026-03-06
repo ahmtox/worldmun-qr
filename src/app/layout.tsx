@@ -12,7 +12,7 @@ export const metadata: Metadata = {
   title: "WorldMUN Attendance",
   description: "QR Code attendance tracking for WorldMUN conference",
   icons: {
-    icon: "/worldmun-qr/worldmun-logo.webp",
+    icon: `${process.env.NEXT_PUBLIC_BASE_PATH || ""}/worldmun-logo.webp`,
   },
 };
 

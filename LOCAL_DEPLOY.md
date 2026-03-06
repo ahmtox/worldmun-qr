@@ -1,9 +1,14 @@
 # Local Development (macOS)
 
-## Prerequisites
-- Node.js (v18+) via nvm
-- `.env.local` in project root with `SHEET_ID` and `GOOGLE_SERVICE_ACCOUNT_JSON`
-- `sa.json` in project root (Google service account credentials)
+Runs at `http://localhost:3000/worldmun-qr`
+
+## .env.local
+
+```
+NEXT_PUBLIC_BASE_PATH=/worldmun-qr
+SHEET_ID=<your-google-sheet-id>
+GOOGLE_SERVICE_ACCOUNT_JSON=<single-line JSON from sa.json>
+```
 
 ## Setup (first time)
 ```bash

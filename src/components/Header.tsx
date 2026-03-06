@@ -3,7 +3,7 @@ export default function Header() {
     <div className="flex flex-col items-center gap-2 pb-4 border-b border-gray-800">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src="/worldmun-qr/worldmun-logo.webp"
+        src={`${process.env.NEXT_PUBLIC_BASE_PATH || ""}/worldmun-logo.webp`}
         alt="WorldMUN"
         width={72}
         height={72}

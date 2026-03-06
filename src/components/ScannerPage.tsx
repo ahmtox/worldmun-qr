@@ -21,7 +21,8 @@ export default function ScannerPage() {
   useEffect(() => {
     async function loadEvents() {
       try {
-        const res = await fetch("/worldmun-qr/api/events");
+        const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
+        const res = await fetch(`${basePath}/api/events`);
         const data = await res.json();
         if (data.events && data.events.length > 0) {
           setEvents(data.events);
@@ -45,7 +46,8 @@ export default function ScannerPage() {
       setIsLoading(true);
 
       try {
-        const res = await fetch("/worldmun-qr/api/scan", {
+        const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
+        const res = await fetch(`${basePath}/api/scan`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ uid: decodedText.trim(), event: selectedEventRef.current }),
