@@ -15,6 +15,7 @@ const QR_DIR = join(BADGES_DIR, "qrcodes");
 const IDENTIFIERS = [
   "OBSERVER", "SOLO", "BATCH1", "BATCH2", "BATCH3", "BATCH4",
   "BATCH5", "BATCH6", "ASCHAIR", "SECRET", "COMMC", "FACADV",
+  "HOST", "STAFF1", "STAFF2",
 ];
 
 // QR code placement: bottom-left yellow box

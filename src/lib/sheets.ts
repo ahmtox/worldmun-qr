@@ -10,7 +10,6 @@ const FIXED_COLUMNS = new Set([
   "NAME",
   "QR_UID",
   "QR_URL",
-  "Social Package",
 ]);
 
 export interface DelegateInfo {
